@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fuhrpark – Buchungssystem</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1410;
+    --surface: #171d18;
+    --card: #1e261f;
+    --border: #2a3a2b;
+    --accent: #5dbe6e;
+    --accent2: #a8e063;
+    --warn: #e0a020;
+    --danger: #e05050;
+    --text: #e8f0e9;
+    --muted: #6b836c;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-mono); min-height: 100vh; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 20px 32px; display: flex; align-items: center; gap: 16px;
+  }
+  .logo-icon { width: 42px; height: 42px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  header h1 { font-family: var(--font-head); font-weight: 800; font-size: 1.4rem; letter-spacing: -0.02em; }
+  header span { color: var(--muted); font-size: 0.8rem; }
+  .header-right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .sync-indicator { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--muted); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+  .sync-dot.ok { background: var(--accent); }
+  .sync-dot.loading { background: var(--warn); animation: pulse 1s infinite; }
+  .sync-dot.error { background: var(--danger); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Setup Banner */
+  .setup-banner {
+    background: #1e1a0a; border: 1px solid #4a3a10; border-radius: 14px;
+    padding: 20px 24px; margin-bottom: 24px; display: none;
+  }
+  .setup-banner.visible { display: block; }
+  .setup-banner h3 { font-family: var(--font-head); font-size: 1rem; color: var(--warn); margin-bottom: 10px; }
+  .setup-banner p { font-size: 0.78rem; color: #c8b080; line-height: 1.7; }
+  .setup-banner code {
+    background: #0f1410; border: 1px solid #4a3a10; border-radius: 6px;
+    padding: 2px 7px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent2);
+  }
+  .url-input-row { display: flex; gap: 10px; margin-top: 14px; }
+  .url-input-row input {
+    flex: 1; background: var(--surface); border: 1px solid #4a3a10;
+    border-radius: 8px; color: var(--text); font-family: var(--font-mono);
+    font-size: 0.78rem; padding: 9px 12px; outline: none;
+  }
+  .url-input-row input:focus { border-color: var(--warn); }
+  .btn-save-url {
+    background: var(--warn); color: #1a1000; border: none;
+    border-radius: 8px; font-family: var(--font-head); font-weight: 700;
+    font-size: 0.82rem; padding: 9px 18px; cursor: pointer; white-space: nowrap;
+  }
+  .btn-save-url:hover { background: var(--accent2); }
+
+  .container { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+  .section-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; }
+
+  .vehicles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 32px; }
+  .vehicle-chip {
+    background: var(--card); border: 1.5px solid var(--border);
+    border-radius: 14px; padding: 16px 18px; transition: border-color 0.2s, transform 0.15s;
+  }
+  .vehicle-chip .chip-icon { font-size: 26px; margin-bottom: 6px; }
+  .vehicle-chip .chip-name { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; }
+  .vehicle-chip .chip-type { color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+  .vehicle-chip .chip-status { display: inline-block; margin-top: 10px; padding: 3px 10px; border-radius: 20px; font-size: 0.68rem; font-weight: 500; }
+  .status-free { background: #1c3a1f; color: var(--accent2); }
+  .status-busy { background: #3a1c1c; color: var(--danger); }
+
+  .main-cols { display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; }
+  @media (max-width: 960px) { .main-cols { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .panel-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-head h2 { font-family: var(--font-head); font-weight: 700; font-size: 1rem; }
+
+  .month-nav { display: flex; align-items: center; gap: 12px; }
+  .month-nav button {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1rem; transition: background 0.15s;
+  }
+  .month-nav button:hover { background: var(--border); }
+  .month-label { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; min-width: 150px; text-align: center; }
+
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 14px; }
+  .cal-day-name { text-align: center; font-size: 0.65rem; color: var(--muted); padding: 4px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .cal-day {
+    aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; border-radius: 8px; font-size: 0.78rem; cursor: pointer;
+    position: relative; transition: background 0.15s; user-select: none;
+  }
+  .cal-day:hover { background: var(--border); }
+  .cal-day.today { border: 1.5px solid var(--accent); }
+  .cal-day.booked { background: #3a1c1c; color: var(--danger); }
+  .cal-day.partial { background: #3a2e1c; color: var(--warn); }
+  .cal-day.other-month { color: var(--muted); opacity: 0.4; }
+  .cal-day.selected-day { background: var(--accent); color: #0f1410; font-weight: 700; }
+  .dot-row { display: flex; gap: 2px; margin-top: 2px; }
+  .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+  .dot.busy { background: var(--danger); }
+
+  .bookings-list { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-height: 80px; }
+  .booking-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; }
+  .booking-item .bk-icon { font-size: 18px; }
+  .booking-item .bk-info { flex: 1; }
+  .booking-item .bk-name { font-family: var(--font-head); font-weight: 600; font-size: 0.85rem; }
+  .booking-item .bk-meta { color: var(--muted); font-size: 0.7rem; margin-top: 2px; }
+  .booking-item .bk-person { font-size: 0.72rem; color: var(--accent2); }
+  .booking-item .del-btn {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: 1rem; padding: 4px; border-radius: 6px; transition: color 0.15s, background 0.15s;
+  }
+  .booking-item .del-btn:hover { color: var(--danger); background: #3a1c1c; }
+
+  .form-panel { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .form-group label { display: block; font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--font-mono);
+    font-size: 0.82rem; padding: 9px 12px; outline: none; transition: border-color 0.15s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+  .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn-primary {
+    background: var(--accent); color: #0f1410; border: none; border-radius: 10px;
+    font-family: var(--font-head); font-weight: 700; font-size: 0.9rem;
+    padding: 11px 20px; cursor: pointer; transition: background 0.15s, transform 0.1s; width: 100%;
+  }
+  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.7rem; color: var(--muted); }
+  .leg-item { display: flex; align-items: center; gap: 6px; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 3px; }
+  .empty-msg { text-align: center; color: var(--muted); font-size: 0.78rem; padding: 20px 0; }
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(60px);
+    background: var(--accent); color: #0f1410; font-family: var(--font-head); font-weight: 700;
+    padding: 12px 24px; border-radius: 12px; font-size: 0.88rem;
+    transition: transform 0.3s ease; z-index: 999; pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--danger); color: #fff; }
+
+  .refresh-btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; font-size: 0.75rem; font-family: var(--font-mono);
+    padding: 5px 12px; cursor: pointer; transition: background 0.15s;
+  }
+  .refresh-btn:hover { background: var(--border); color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">🚚</div>
+  <div>
+    <h1>Fuhrpark-Buchung <span>/ Seil & Beil</span></h1>
+  </div>
+  <div class="header-right">
+    <div class="sync-indicator">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncLabel">Nicht verbunden</span>
+    </div>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#5dbe6e"></div>Frei</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#e0a020"></div>Teilbelegt</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#e05050"></div>Belegt</div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Setup Banner -->
+  <div class="setup-banner visible" id="setupBanner">
+    <h3>⚙️ Google Sheets Verbindung einrichten</h3>
+    <p>
+      1. Öffne dein Google Sheet und klicke auf <code>Erweiterungen → Apps Script</code>.<br>
+      2. Füge den Inhalt der beiliegenden Datei <code>apps-script.gs</code> ein und speichere.<br>
+      3. Klicke auf <code>Bereitstellen → Neue Bereitstellung → Web-App</code>.<br>
+      4. Stelle ein: Zugriff = <code>Jeder</code>. Dann auf <code>Bereitstellen</code> klicken.<br>
+      5. Kopiere die <strong>Web-App-URL</strong> und füge sie hier ein:
+    </p>
+    <div class="url-input-row">
+      <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/…/exec">
+      <button class="btn-save-url" onclick="saveScriptUrl()">Verbinden ✓</button>
+    </div>
+  </div>
+
+  <p class="section-label">Fuhrpark — 6 Fahrzeuge</p>
+  <div class="vehicles-grid" id="vehicleGrid"></div>
+
+  <div class="main-cols">
+    <div>
+      <div class="panel" style="margin-bottom:20px">
+        <div class="panel-head">
+          <h2 id="calTitle">Kalender</h2>
+          <div class="month-nav">
+            <button onclick="changeMonth(-1)">‹</button>
+            <div class="month-label" id="monthLabel"></div>
+            <button onclick="changeMonth(1)">›</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="bookingListTitle">Buchungen am …</h2>
+          <button class="refresh-btn" onclick="loadBookings()">↻ Aktualisieren</button>
+        </div>
+        <div class="bookings-list" id="bookingsList">
+          <div class="empty-msg">Wähle einen Tag im Kalender</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="panel-head"><h2>Neue Reservierung</h2></div>
+        <div class="form-panel">
+          <div class="form-group">
+            <label>Fahrzeug</label>
+            <select id="fzSelect">
+              <option value="">– Fahrzeug wählen –</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Mitarbeiter / Name</label>
+            <input type="text" id="personInput" placeholder="z.B. Max Müller">
+          </div>
+          <div class="date-row">
+            <div class="form-group">
+              <label>Von</label>
+              <input type="date" id="dateFrom">
+            </div>
+            <div class="form-group">
+              <label>Bis</label>
+              <input type="date" id="dateTo">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Einsatzort / Notiz</label>
+            <textarea id="noteInput" placeholder="z.B. Baustelle Trierer Str. 12 – Fällarbeiten"></textarea>
+          </div>
+          <button class="btn-primary" id="submitBtn" onclick="addBooking()">Reservierung eintragen ✓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const VEHICLES = [
+  { id: 'pritsche1', name: 'Pritsche 1', type: 'Pritschenwagen', icon: '🚛' },
+  { id: 'pritsche2', name: 'Pritsche 2', type: 'Pritschenwagen', icon: '🚛' },
+  { id: 'pritsche3', name: 'Pritsche 3', type: 'Pritschenwagen', icon: '🚛' },
+  { id: 'transit',   name: 'Ford Transit', type: 'Transporter', icon: '🚐' },
+  { id: 'hacker1',   name: 'Hacker 1', type: 'Häcksler / Maschine', icon: '🌿' },
+  { id: 'hacker2',   name: 'Hacker 2', type: 'Häcksler / Maschine', icon: '🌿' },
+];
+
+let bookings = [];
+let scriptUrl = localStorage.getItem('sb_script_url') || '';
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth();
+let selectedDate = null;
+
+// --- Setup ---
+function saveScriptUrl() {
+  const val = document.getElementById('scriptUrlInput').value.trim();
+  if (!val.startsWith('https://script.google.com')) {
+    showToast('❌ Ungültige URL', true); return;
+  }
+  scriptUrl = val;
+  localStorage.setItem('sb_script_url', scriptUrl);
+  document.getElementById('setupBanner').classList.remove('visible');
+  loadBookings();
+}
+
+if (scriptUrl) {
+  document.getElementById('setupBanner').classList.remove('visible');
+  document.getElementById('scriptUrlInput').value = scriptUrl;
+}
+
+// --- Sync Status ---
+function setSyncStatus(state, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot ' + state;
+  lbl.textContent = label;
+}
+
+// --- API ---
+async function loadBookings() {
+  if (!scriptUrl) return;
+  setSyncStatus('loading', 'Lädt …');
+  try {
+    const res = await fetch(`${scriptUrl}?action=getBookings`);
+    const data = await res.json();
+    bookings = data.bookings || [];
+    setSyncStatus('ok', 'Verbunden');
+    renderVehicles();
+    renderCalendar();
+    if (selectedDate) renderBookingList(selectedDate);
+  } catch (e) {
+    setSyncStatus('error', 'Fehler');
+    showToast('❌ Verbindung zu Google Sheets fehlgeschlagen', true);
+  }
+}
+
+async function apiAddBooking(booking) {
+  const res = await fetch(scriptUrl, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'addBooking', booking }),
+  });
+  return await res.json();
+}
+
+async function apiDeleteBooking(id) {
+  const res = await fetch(scriptUrl, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'deleteBooking', id }),
+  });
+  return await res.json();
+}
+
+// --- Vehicles ---
+function renderVehicles() {
+  const grid = document.getElementById('vehicleGrid');
+  const sel = document.getElementById('fzSelect');
+  grid.innerHTML = '';
+  sel.innerHTML = '<option value="">– Fahrzeug wählen –</option>';
+
+  VEHICLES.forEach(v => {
+    const todayStr = dateStr(new Date());
+    const busy = bookings.some(b => b.vehicleId === v.id && b.from <= todayStr && b.to >= todayStr);
+    const chip = document.createElement('div');
+    chip.className = 'vehicle-chip';
+    chip.innerHTML = `
+      <div class="chip-icon">${v.icon}</div>
+      <div class="chip-name">${v.name}</div>
+      <div class="chip-type">${v.type}</div>
+      <div class="chip-status ${busy ? 'status-busy' : 'status-free'}">${busy ? '● Belegt heute' : '● Frei heute'}</div>
+    `;
+    grid.appendChild(chip);
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = `${v.icon} ${v.name}`;
+    sel.appendChild(opt);
+  });
+}
+
+// --- Calendar ---
+const MONTHS_DE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const DAYS_DE = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+
+function changeMonth(dir) {
+  currentMonth += dir;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  if (currentMonth < 0)  { currentMonth = 11; currentYear--; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  document.getElementById('monthLabel').textContent = `${MONTHS_DE[currentMonth]} ${currentYear}`;
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+  DAYS_DE.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'cal-day-name'; el.textContent = d; grid.appendChild(el);
+  });
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  let startDow = firstDay.getDay();
+  startDow = startDow === 0 ? 6 : startDow - 1;
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const daysInPrev  = new Date(currentYear, currentMonth, 0).getDate();
+  const todayStr = dateStr(new Date());
+
+  for (let i = startDow - 1; i >= 0; i--) {
+    const el = document.createElement('div'); el.className = 'cal-day other-month';
+    el.textContent = daysInPrev - i; grid.appendChild(el);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayB = bookings.filter(b => b.from <= iso && b.to >= iso);
+    const el = document.createElement('div');
+    let cls = 'cal-day';
+    if (iso === todayStr) cls += ' today';
+    if (iso === selectedDate) cls += ' selected-day';
+    else if (dayB.length >= VEHICLES.length) cls += ' booked';
+    else if (dayB.length > 0) cls += ' partial';
+    el.className = cls;
+    el.textContent = d;
+    if (dayB.length > 0 && iso !== selectedDate) {
+      const row = document.createElement('div'); row.className = 'dot-row';
+      for (let i = 0; i < Math.min(dayB.length, 5); i++) {
+        const dot = document.createElement('div');
+        dot.className = 'dot' + (dayB.length >= VEHICLES.length ? ' busy' : '');
+        row.appendChild(dot);
+      }
+      el.appendChild(row);
+    }
+    el.onclick = () => selectDay(iso);
+    grid.appendChild(el);
+  }
+  const total = startDow + daysInMonth;
+  const rem = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= rem; d++) {
+    const el = document.createElement('div'); el.className = 'cal-day other-month';
+    el.textContent = d; grid.appendChild(el);
+  }
+}
+
+function selectDay(iso) {
+  selectedDate = iso;
+  document.getElementById('dateFrom').value = iso;
+  document.getElementById('dateTo').value = iso;
+  renderCalendar();
+  renderBookingList(iso);
+}
+
+function renderBookingList(iso) {
+  const [y, m, d] = iso.split('-');
+  document.getElementById('bookingListTitle').textContent = `Buchungen am ${d}.${m}.${y}`;
+  const list = document.getElementById('bookingsList');
+  const dayB = bookings.filter(b => b.from <= iso && b.to >= iso);
+  if (dayB.length === 0) { list.innerHTML = '<div class="empty-msg">Keine Buchungen an diesem Tag ✓</div>'; return; }
+  list.innerHTML = '';
+  dayB.forEach(b => {
+    const v = VEHICLES.find(v => v.id === b.vehicleId);
+    const item = document.createElement('div'); item.className = 'booking-item';
+    item.innerHTML = `
+      <div class="bk-icon">${v ? v.icon : '🚗'}</div>
+      <div class="bk-info">
+        <div class="bk-name">${v ? v.name : b.vehicleId}</div>
+        <div class="bk-meta">${b.from} → ${b.to}</div>
+        <div class="bk-person">👤 ${b.person}${b.note ? ' · ' + b.note : ''}</div>
+      </div>
+      <button class="del-btn" onclick="deleteBooking('${b.id}')" title="Löschen">✕</button>
+    `;
+    list.appendChild(item);
+  });
+}
+
+// --- CRUD ---
+async function addBooking() {
+  if (!scriptUrl) { showToast('⚠️ Bitte zuerst Google Sheets verbinden', true); return; }
+  const vehicleId = document.getElementById('fzSelect').value;
+  const person    = document.getElementById('personInput').value.trim();
+  const from      = document.getElementById('dateFrom').value;
+  const to        = document.getElementById('dateTo').value;
+  const note      = document.getElementById('noteInput').value.trim();
+  if (!vehicleId) return showToast('❌ Bitte Fahrzeug wählen', true);
+  if (!person)    return showToast('❌ Bitte Name eintragen', true);
+  if (!from||!to) return showToast('❌ Bitte Datum wählen', true);
+  if (from > to)  return showToast('❌ Enddatum vor Startdatum', true);
+
+  const conflict = bookings.find(b => b.vehicleId === vehicleId && b.from <= to && b.to >= from);
+  if (conflict) {
+    const v = VEHICLES.find(v => v.id === vehicleId);
+    return showToast(`⚠️ ${v.name} ist in diesem Zeitraum belegt`, true);
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = 'Wird gespeichert …';
+  setSyncStatus('loading', 'Speichert …');
+
+  try {
+    const id = 'bk_' + Date.now();
+    const result = await apiAddBooking({ id, vehicleId, person, from, to, note });
+    if (result.success) {
+      bookings.push({ id, vehicleId, person, from, to, note });
+      showToast('✓ Reservierung gespeichert');
+      document.getElementById('personInput').value = '';
+      document.getElementById('noteInput').value = '';
+      renderVehicles(); renderCalendar();
+      if (selectedDate) renderBookingList(selectedDate);
+      setSyncStatus('ok', 'Verbunden');
+    } else {
+      showToast('❌ Fehler: ' + (result.error || 'Unbekannt'), true);
+      setSyncStatus('error', 'Fehler');
+    }
+  } catch(e) {
+    showToast('❌ Verbindungsfehler', true);
+    setSyncStatus('error', 'Fehler');
+  }
+  btn.disabled = false; btn.textContent = 'Reservierung eintragen ✓';
+}
+
+async function deleteBooking(id) {
+  if (!confirm('Buchung wirklich löschen?')) return;
+  setSyncStatus('loading', 'Löscht …');
+  try {
+    const result = await apiDeleteBooking(id);
+    if (result.success) {
+      bookings = bookings.filter(b => b.id !== id);
+      showToast('Buchung gelöscht');
+      setSyncStatus('ok', 'Verbunden');
+      renderVehicles(); renderCalendar();
+      if (selectedDate) renderBookingList(selectedDate);
+    } else {
+      showToast('❌ Löschen fehlgeschlagen', true);
+      setSyncStatus('error', 'Fehler');
+    }
+  } catch(e) {
+    showToast('❌ Verbindungsfehler', true);
+    setSyncStatus('error', 'Fehler');
+  }
+}
+
+// --- Helpers ---
+function dateStr(d) { return d.toISOString().slice(0,10); }
+
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// --- Init ---
+renderVehicles();
+renderCalendar();
+if (scriptUrl) loadBookings();
+setInterval(() => { if (scriptUrl) loadBookings(); }, 60000); // Auto-refresh every 60s
+</script>
+</body>
+</html>
